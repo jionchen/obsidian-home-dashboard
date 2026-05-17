@@ -1,7 +1,7 @@
 import { ItemView, Notice, TFile, WorkspaceLeaf, setIcon } from "obsidian";
 import type HomeDashboardPlugin from "./main";
 import { DidaSyncAdapter } from "./didaSyncAdapter";
-import { buildTaskPlan, type PlannedTask } from "./taskPlanner";
+import { buildTaskPlan, getVisibleTasks, type PlannedTask } from "./taskPlanner";
 import {
   getRecentMarkdownFiles,
   getTodayDailyPath,
@@ -30,10 +30,15 @@ const formatTime = (mtime: number) =>
   }).format(new Date(mtime));
 
 const taskId = (task: PlannedTask) => task.didaId || task.id || task.title;
+const taskSectionExpansion: Record<"current" | "range", boolean> = {
+  current: false,
+  range: false
+};
 
 export class HomeDashboardView extends ItemView {
   private adapter: DidaSyncAdapter;
   private taskRange: "week" | "all" = "week";
+  private expandedTaskSections = taskSectionExpansion;
 
   constructor(leaf: WorkspaceLeaf, private readonly plugin: HomeDashboardPlugin) {
     super(leaf);
@@ -169,7 +174,7 @@ export class HomeDashboardView extends ItemView {
     const columns = card.createDiv("ohd-task-columns");
     const current = columns.createDiv("ohd-task-column");
     current.createEl("h3", { text: "当前要处理" });
-    this.renderTaskList(current, plan.current.slice(0, 6), "current");
+    this.renderTaskList(current, plan.current, "current");
 
     const range = columns.createDiv("ohd-task-column");
     const rangeHeader = range.createDiv("ohd-task-range-head");
@@ -179,10 +184,12 @@ export class HomeDashboardView extends ItemView {
     const allBtn = switcher.createEl("button", { text: "全部" , cls: this.taskRange === "all" ? "active" : "" });
     weekBtn.addEventListener("click", () => {
       this.taskRange = "week";
+      this.expandedTaskSections.range = false;
       this.render();
     });
     allBtn.addEventListener("click", () => {
       this.taskRange = "all";
+      this.expandedTaskSections.range = false;
       this.render();
     });
 
@@ -196,13 +203,14 @@ export class HomeDashboardView extends ItemView {
         this.render();
       });
     } else {
-      this.renderTaskList(range, rangeTasks.slice(0, 6), "range");
+      this.renderTaskList(range, rangeTasks, "range");
     }
   }
 
   private renderTaskList(container: HTMLElement, tasks: PlannedTask[], mode: "current" | "range"): void {
+    const visible = getVisibleTasks(tasks, this.expandedTaskSections[mode]);
     const list = container.createDiv("ohd-task-list");
-    tasks.forEach((task) => {
+    visible.items.forEach((task) => {
       const row = list.createDiv(`ohd-task-row ${task.bucket}`);
       const dot = row.createEl("button", { cls: "ohd-task-dot", attr: { "aria-label": "切换完成状态" } });
       if (task.status === 2) dot.textContent = "✓";
@@ -218,6 +226,20 @@ export class HomeDashboardView extends ItemView {
       if (task.effectiveDate) sub.createSpan({ text: formatTime(task.effectiveDate.getTime()), cls: "ohd-soft-pill" });
       if (mode === "current" && task.bucket === "overdue") sub.createSpan({ text: "逾期", cls: "ohd-soft-pill danger" });
     });
+
+    if (tasks.length > 5) {
+      const more = container.createEl("button", {
+        text: this.expandedTaskSections[mode] ? "收起" : `查看全部 ${visible.hiddenCount}`,
+        cls: "ohd-button ohd-button-ghost ohd-task-more",
+        attr: { type: "button" }
+      });
+      more.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        this.expandedTaskSections[mode] = !this.expandedTaskSections[mode];
+        this.render();
+      });
+    }
   }
 
   private renderFocusCard(container: HTMLElement): void {

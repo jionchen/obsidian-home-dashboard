@@ -33,6 +33,15 @@ export type TaskPlan = {
   };
 };
 
+export function getVisibleTasks<T>(tasks: T[], expanded: boolean, limit = 5) {
+  const items = expanded ? tasks : tasks.slice(0, limit);
+  return {
+    items,
+    hiddenCount: expanded ? 0 : Math.max(tasks.length - limit, 0),
+    canExpand: !expanded && tasks.length > limit
+  };
+}
+
 const dayStart = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate());
 
 const rollingWeekEnd = (date: Date) => {

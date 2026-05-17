@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildTaskPlan, type DidaTaskLike } from "../src/taskPlanner";
+import { buildTaskPlan, getVisibleTasks, type DidaTaskLike } from "../src/taskPlanner";
 
 describe("buildTaskPlan", () => {
   const now = new Date("2026-05-17T10:00:00+08:00");
@@ -38,5 +38,26 @@ describe("buildTaskPlan", () => {
     const plan = buildTaskPlan(tasks, now);
 
     expect(plan.current.map((task) => task.id)).toEqual(["overdue", "today", "later"]);
+  });
+});
+
+describe("getVisibleTasks", () => {
+  it("limits collapsed task lists to five and exposes overflow state", () => {
+    const tasks = Array.from({ length: 7 }, (_, index) => ({
+      id: String(index),
+      title: `任务 ${index}`,
+      status: 0,
+      bucket: "later" as const
+    }));
+
+    const collapsed = getVisibleTasks(tasks, false);
+    const expanded = getVisibleTasks(tasks, true);
+
+    expect(collapsed.items).toHaveLength(5);
+    expect(collapsed.hiddenCount).toBe(2);
+    expect(collapsed.canExpand).toBe(true);
+    expect(expanded.items).toHaveLength(7);
+    expect(expanded.hiddenCount).toBe(0);
+    expect(expanded.canExpand).toBe(false);
   });
 });
