@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildTaskPlan, getVisibleTasks, type DidaTaskLike } from "../src/taskPlanner";
+import { buildTaskPlan, getTodayAgenda, getVisibleTasks, type DidaTaskLike } from "../src/taskPlanner";
 
 describe("buildTaskPlan", () => {
   const now = new Date("2026-05-17T10:00:00+08:00");
@@ -59,5 +59,31 @@ describe("getVisibleTasks", () => {
     expect(expanded.items).toHaveLength(7);
     expect(expanded.hiddenCount).toBe(0);
     expect(expanded.canExpand).toBe(false);
+  });
+});
+
+describe("getTodayAgenda", () => {
+  const now = new Date("2026-05-17T10:00:00+08:00");
+
+  it("returns overdue + today tasks in current's existing order, excluding thisWeek/later/completed", () => {
+    const tasks: DidaTaskLike[] = [
+      { id: "later", title: "以后", status: 0, startDate: "2026-06-01T09:00:00+0800" },
+      { id: "today", title: "今天", status: 0, startDate: "2026-05-17T09:00:00+0800" },
+      { id: "overdue", title: "逾期", status: 0, startDate: "2026-05-10T09:00:00+0800" },
+      { id: "thisWeek", title: "本周", status: 0, startDate: "2026-05-20T09:00:00+0800" },
+      { id: "done", title: "已完成", status: 2, startDate: "2026-05-17T09:00:00+0800" }
+    ];
+    const plan = buildTaskPlan(tasks, now);
+    const agenda = getTodayAgenda(plan);
+    expect(agenda.map((t) => t.id)).toEqual(["overdue", "today"]);
+  });
+
+  it("returns empty when nothing is overdue or due today", () => {
+    const tasks: DidaTaskLike[] = [
+      { id: "thisWeek", title: "本周", status: 0, startDate: "2026-05-20T09:00:00+0800" },
+      { id: "later", title: "以后", status: 0, startDate: "2026-06-01T09:00:00+0800" }
+    ];
+    const plan = buildTaskPlan(tasks, now);
+    expect(getTodayAgenda(plan)).toEqual([]);
   });
 });

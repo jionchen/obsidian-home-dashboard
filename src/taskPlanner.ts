@@ -103,3 +103,7 @@ export function buildTaskPlan(tasks: DidaTaskLike[], now = new Date()): TaskPlan
     }
   };
 }
+
+export function getTodayAgenda(plan: TaskPlan): PlannedTask[] {
+  return plan.current.filter((task) => task.bucket === "overdue" || task.bucket === "today");
+}

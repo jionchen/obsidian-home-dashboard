@@ -1,6 +1,7 @@
 import { Plugin, WorkspaceLeaf } from "obsidian";
 import { HomeDashboardView, HOME_DASHBOARD_VIEW_TYPE } from "./HomeDashboardView";
 import { DEFAULT_SETTINGS, type HomeDashboardSettings } from "./settings";
+import { HomeDashboardSettingTab } from "./settingsTab";
 
 export default class HomeDashboardPlugin extends Plugin {
   settings: HomeDashboardSettings = DEFAULT_SETTINGS;
@@ -19,6 +20,8 @@ export default class HomeDashboardPlugin extends Plugin {
       name: "Open home dashboard",
       callback: () => void this.activateView()
     });
+
+    this.addSettingTab(new HomeDashboardSettingTab(this.app, this));
   }
 
   onunload(): void {
@@ -41,5 +44,9 @@ export default class HomeDashboardPlugin extends Plugin {
 
   async saveSettings(): Promise<void> {
     await this.saveData(this.settings);
+    this.app.workspace.getLeavesOfType(HOME_DASHBOARD_VIEW_TYPE).forEach((leaf) => {
+      const view = leaf.view;
+      if (view instanceof HomeDashboardView) view.onSettingsChange();
+    });
   }
 }

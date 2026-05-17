@@ -1,18 +1,31 @@
 .ohd-root {
-  --ohd-bg: #f0eef6;
-  --ohd-card: #ffffff;
-  --ohd-primary: #6c5ce7;
-  --ohd-primary-soft: #efecff;
-  --ohd-text: #1c1938;
-  --ohd-muted: #858094;
-  --ohd-green: #22c55e;
+  --ohd-accent: #6c5ce7;
+  --ohd-accent-soft: color-mix(in srgb, var(--ohd-accent) 14%, transparent);
+  --ohd-accent-strong: color-mix(in srgb, var(--ohd-accent) 22%, transparent);
   --ohd-danger: #ef596f;
+  --ohd-danger-soft: color-mix(in srgb, var(--ohd-danger) 14%, transparent);
+  --ohd-green: #22c55e;
+
+  --ohd-bg: var(--background-primary);
+  --ohd-card: var(--background-primary-alt, var(--background-secondary));
+  --ohd-card-2: var(--background-secondary);
+  --ohd-text: var(--text-normal);
+  --ohd-muted: var(--text-muted);
+  --ohd-border: var(--background-modifier-border);
   --ohd-shadow: 0 4px 18px rgba(28, 25, 56, .06);
+
   background: var(--ohd-bg);
   color: var(--ohd-text);
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", var(--font-interface);
   height: 100%;
   overflow: auto;
+}
+
+body.theme-dark .ohd-root {
+  --ohd-accent: #9d8df1;
+  --ohd-accent-soft: color-mix(in srgb, var(--ohd-accent) 18%, transparent);
+  --ohd-accent-strong: color-mix(in srgb, var(--ohd-accent) 28%, transparent);
+  --ohd-shadow: 0 4px 18px rgba(0, 0, 0, .35);
 }
 
 .ohd-shell {
@@ -60,8 +73,8 @@
 
 .ohd-version,
 .ohd-code-pill {
-  background: var(--ohd-primary-soft);
-  color: var(--ohd-primary);
+  background: var(--ohd-accent-soft);
+  color: var(--ohd-accent);
   font-family: "SF Mono", "Source Code Pro", var(--font-monospace);
 }
 
@@ -82,8 +95,8 @@
 
 .ohd-search,
 .ohd-input {
-  background: #fff;
-  border: 0;
+  background: var(--ohd-card);
+  border: 1px solid var(--ohd-border);
   border-radius: 12px;
   box-shadow: var(--ohd-shadow);
   color: var(--ohd-text);
@@ -98,7 +111,8 @@
 
 .ohd-search:focus,
 .ohd-input:focus {
-  box-shadow: 0 0 0 4px rgba(108, 92, 231, .16), var(--ohd-shadow);
+  border-color: var(--ohd-accent);
+  box-shadow: 0 0 0 4px var(--ohd-accent-soft), var(--ohd-shadow);
 }
 
 .ohd-button {
@@ -114,15 +128,16 @@
 }
 
 .ohd-button-primary {
-  background: var(--ohd-primary);
-  box-shadow: 0 9px 18px rgba(108, 92, 231, .22);
+  background: var(--ohd-accent);
+  box-shadow: 0 9px 18px var(--ohd-accent-strong);
   color: #fff;
 }
 
 .ohd-button-ghost {
-  background: #fff;
+  background: var(--ohd-card);
+  border: 1px solid var(--ohd-border);
   box-shadow: var(--ohd-shadow);
-  color: var(--ohd-primary);
+  color: var(--ohd-accent);
 }
 
 .ohd-grid {
@@ -137,7 +152,7 @@
 
 .ohd-card {
   background: var(--ohd-card);
-  border: 0;
+  border: 1px solid var(--ohd-border);
   border-radius: 18px;
   box-shadow: var(--ohd-shadow);
   min-width: 0;
@@ -160,21 +175,10 @@
   margin-bottom: 16px;
 }
 
-.ohd-today-card {
-  grid-area: today;
-}
-
-.ohd-task-card {
-  grid-area: tasks;
-}
-
-.ohd-focus-card {
-  grid-area: focus;
-}
-
-.ohd-recent-card {
-  grid-area: recent;
-}
+.ohd-today-card { grid-area: today; }
+.ohd-task-card { grid-area: tasks; }
+.ohd-focus-card { grid-area: focus; }
+.ohd-recent-card { grid-area: recent; }
 
 .ohd-daily-title {
   font-size: 18px;
@@ -191,7 +195,7 @@
 
 .ohd-week-day {
   align-items: center;
-  background: #f8f7fb;
+  background: var(--ohd-card-2);
   border-radius: 14px;
   color: var(--ohd-muted);
   display: flex;
@@ -202,24 +206,24 @@
 }
 
 .ohd-week-day.active {
-  background: var(--ohd-primary);
-  box-shadow: 0 10px 18px rgba(108, 92, 231, .2);
+  background: var(--ohd-accent);
+  box-shadow: 0 10px 18px var(--ohd-accent-strong);
   color: #fff;
 }
 
 .ohd-chip {
-  background: #f7f6fb;
+  background: var(--ohd-card-2);
   color: var(--ohd-muted);
 }
 
 .ohd-chip.primary {
-  background: var(--ohd-primary-soft);
-  color: var(--ohd-primary);
+  background: var(--ohd-accent-soft);
+  color: var(--ohd-accent);
 }
 
 .ohd-chip.danger,
 .ohd-soft-pill.danger {
-  background: #fff0f3;
+  background: var(--ohd-danger-soft);
   color: var(--ohd-danger);
 }
 
@@ -232,18 +236,6 @@
   min-width: 0;
 }
 
-.ohd-task-columns {
-  align-items: start;
-  display: grid;
-  gap: 16px;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-}
-
-.ohd-task-column {
-  min-width: 0;
-  overflow: hidden;
-}
-
 .ohd-task-range-head {
   align-items: center;
   display: flex;
@@ -252,12 +244,9 @@
   margin-bottom: 12px;
 }
 
-.ohd-task-column > h3 {
-  margin-bottom: 12px;
-}
-
 .ohd-segment {
-  background: #fff;
+  background: var(--ohd-card);
+  border: 1px solid var(--ohd-border);
   border-radius: 999px;
   box-shadow: var(--ohd-shadow);
   display: flex;
@@ -276,8 +265,8 @@
 }
 
 .ohd-segment button.active {
-  background: var(--ohd-primary-soft);
-  color: var(--ohd-primary);
+  background: var(--ohd-accent-soft);
+  color: var(--ohd-accent);
 }
 
 .ohd-task-list,
@@ -308,12 +297,22 @@
 .ohd-task-row:hover,
 .ohd-focus-row:hover,
 .ohd-recent-row:hover {
-  background: #faf9fd;
+  background: var(--background-modifier-hover);
+}
+
+.ohd-task-row:focus-visible,
+.ohd-focus-row:focus-visible,
+.ohd-recent-row:focus-visible,
+.ohd-button:focus-visible,
+.ohd-task-dot:focus-visible,
+.ohd-segment button:focus-visible {
+  outline: 2px solid var(--ohd-accent);
+  outline-offset: 2px;
 }
 
 .ohd-task-dot {
   align-items: center;
-  background: #d8d5e5;
+  background: var(--background-modifier-border);
   border: 0;
   border-radius: 999px;
   color: #fff;
@@ -328,8 +327,8 @@
 
 .ohd-task-row.overdue .ohd-task-dot,
 .ohd-task-row.today .ohd-task-dot {
-  background: var(--ohd-primary);
-  box-shadow: 0 0 0 5px rgba(108, 92, 231, .14);
+  background: var(--ohd-accent);
+  box-shadow: 0 0 0 5px var(--ohd-accent-soft);
 }
 
 .ohd-task-row.completed .ohd-task-dot {
@@ -378,14 +377,14 @@
 }
 
 .ohd-soft-pill {
-  background: #f7f6fb;
+  background: var(--ohd-card-2);
   color: var(--ohd-muted);
   font-size: 11px;
 }
 
 .ohd-empty {
   align-items: center;
-  background: #faf9fd;
+  background: var(--ohd-card-2);
   border-radius: 16px;
   color: var(--ohd-muted);
   display: flex;
@@ -405,9 +404,9 @@
 .ohd-focus-icon,
 .ohd-recent-icon {
   align-items: center;
-  background: var(--ohd-primary-soft);
+  background: var(--ohd-accent-soft);
   border-radius: 13px;
-  color: var(--ohd-primary);
+  color: var(--ohd-accent);
   display: flex;
   flex: 0 0 auto;
   height: 34px;
@@ -418,6 +417,7 @@
 .ohd-overview {
   align-items: center;
   background: var(--ohd-card);
+  border: 1px solid var(--ohd-border);
   border-radius: 18px;
   box-shadow: var(--ohd-shadow);
   display: grid;
@@ -429,7 +429,7 @@
 
 .ohd-overview-item {
   align-items: center;
-  background: #faf9fd;
+  background: var(--ohd-card-2);
   border-radius: 14px;
   display: flex;
   gap: 10px;
@@ -439,10 +439,45 @@
 }
 
 .ohd-overview-value {
-  color: var(--ohd-primary);
+  color: var(--ohd-accent);
   font-size: 21px;
-  font-weight: 900;
+  font-weight: 400;
   line-height: 1;
+}
+
+.ohd-today-agenda {
+  margin-top: 14px;
+}
+
+.ohd-agenda-head {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.ohd-agenda-head h3 {
+  font-size: 14px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.ohd-today-agenda .ohd-task-list {
+  gap: 6px;
+}
+
+.ohd-today-agenda .ohd-task-row {
+  padding: 8px;
+}
+
+.ohd-today-agenda .ohd-empty {
+  align-items: flex-start;
+  flex-direction: row;
+  gap: 10px;
+  justify-content: space-between;
+  min-height: 0;
+  padding: 12px;
 }
 
 @media (max-width: 1100px) {
@@ -474,7 +509,6 @@
     padding: 16px;
   }
 
-  .ohd-task-columns,
   .ohd-overview {
     grid-template-columns: 1fr;
   }

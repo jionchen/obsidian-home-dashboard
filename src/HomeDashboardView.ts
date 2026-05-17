@@ -1,7 +1,7 @@
-import { ItemView, Notice, TFile, WorkspaceLeaf, setIcon } from "obsidian";
+import { ItemView, Notice, TFile, WorkspaceLeaf, normalizePath, setIcon } from "obsidian";
 import type HomeDashboardPlugin from "./main";
 import { DidaSyncAdapter } from "./didaSyncAdapter";
-import { buildTaskPlan, getVisibleTasks, type PlannedTask } from "./taskPlanner";
+import { buildTaskPlan, getTodayAgenda, getVisibleTasks, type PlannedTask } from "./taskPlanner";
 import {
   getRecentMarkdownFiles,
   getTodayDailyPath,
@@ -10,6 +10,7 @@ import {
   openPath,
   type RecentFileItem
 } from "./vaultData";
+import { InboxTaskModal } from "./InboxTaskModal";
 
 export const HOME_DASHBOARD_VIEW_TYPE = "home-dashboard-view";
 
@@ -29,16 +30,27 @@ const formatTime = (mtime: number) =>
     minute: "2-digit"
   }).format(new Date(mtime));
 
-const taskId = (task: PlannedTask) => task.didaId || task.id || task.title;
-const taskSectionExpansion: Record<"current" | "range", boolean> = {
-  current: false,
-  range: false
-};
+const taskKey = (task: PlannedTask) => task.didaId || task.id || task.title;
+
+type RefreshKind = "tasks" | "vault" | "all";
 
 export class HomeDashboardView extends ItemView {
   private adapter: DidaSyncAdapter;
   private taskRange: "week" | "all" = "week";
-  private expandedTaskSections = taskSectionExpansion;
+  private expandedTaskSections: Record<"range" | "agenda", boolean> = {
+    range: false,
+    agenda: false
+  };
+
+  private todaySection?: HTMLElement;
+  private taskSection?: HTMLElement;
+  private focusSection?: HTMLElement;
+  private recentSection?: HTMLElement;
+  private overviewSection?: HTMLElement;
+  private agendaSection?: HTMLElement;
+
+  private refreshTimer?: number;
+  private pending = new Set<RefreshKind>();
 
   constructor(leaf: WorkspaceLeaf, private readonly plugin: HomeDashboardPlugin) {
     super(leaf);
@@ -58,11 +70,25 @@ export class HomeDashboardView extends ItemView {
   }
 
   async onOpen(): Promise<void> {
-    this.render();
-    this.registerEvent(this.app.vault.on("modify", () => this.render()));
+    this.buildLayout();
+    this.registerEvent(this.app.vault.on("modify", () => this.scheduleRefresh("vault")));
+    this.registerEvent(this.app.vault.on("create", () => this.scheduleRefresh("vault")));
+    this.registerEvent(this.app.vault.on("delete", () => this.scheduleRefresh("vault")));
+    this.registerEvent(this.app.vault.on("rename", () => this.scheduleRefresh("vault")));
   }
 
-  render(): void {
+  async onClose(): Promise<void> {
+    if (this.refreshTimer !== undefined) {
+      window.clearTimeout(this.refreshTimer);
+      this.refreshTimer = undefined;
+    }
+  }
+
+  onSettingsChange(): void {
+    this.scheduleRefresh("all");
+  }
+
+  private buildLayout(): void {
     const { contentEl } = this;
     contentEl.empty();
     contentEl.addClass("ohd-root");
@@ -71,18 +97,53 @@ export class HomeDashboardView extends ItemView {
     this.renderHeader(shell);
 
     const grid = shell.createDiv("ohd-grid");
-    this.renderTodayCard(grid);
-    this.renderTaskCard(grid);
-    this.renderFocusCard(grid);
-    this.renderRecentCard(grid);
-    this.renderOverview(shell);
+    this.todaySection = grid.createDiv("ohd-card ohd-today-card");
+    this.taskSection = grid.createDiv("ohd-card ohd-task-card");
+    this.focusSection = grid.createDiv("ohd-card ohd-focus-card");
+    this.recentSection = grid.createDiv("ohd-card ohd-recent-card");
+    this.overviewSection = shell.createDiv("ohd-overview");
+
+    this.renderToday();
+    this.renderTasks();
+    this.renderFocus();
+    this.renderRecent();
+    this.renderOverview();
+  }
+
+  private scheduleRefresh(kind: RefreshKind): void {
+    this.pending.add(kind);
+    if (this.refreshTimer !== undefined) return;
+    this.refreshTimer = window.setTimeout(() => {
+      this.refreshTimer = undefined;
+      const kinds = this.pending;
+      this.pending = new Set();
+      if (kinds.has("all")) {
+        this.renderToday();
+        this.renderTasks();
+        this.renderFocus();
+        this.renderRecent();
+        this.renderOverview();
+        return;
+      }
+      if (kinds.has("tasks")) {
+        this.renderTasks();
+        this.renderTodayAgenda();
+        this.renderOverview();
+      }
+      if (kinds.has("vault")) {
+        this.renderToday();
+        this.renderFocus();
+        this.renderRecent();
+        this.renderOverview();
+      }
+    }, 300);
   }
 
   private renderHeader(container: HTMLElement): void {
     const header = container.createDiv("ohd-header");
     const titleWrap = header.createDiv("ohd-title-wrap");
     titleWrap.createEl("h1", { text: "Home" });
-    titleWrap.createSpan({ text: "v0.2", cls: "ohd-version" });
+    titleWrap.createSpan({ text: `v${this.plugin.manifest.version}`, cls: "ohd-version" });
     titleWrap.createSpan({ text: formatDate(), cls: "ohd-date" });
 
     const actions = header.createDiv("ohd-header-actions");
@@ -101,51 +162,147 @@ export class HomeDashboardView extends ItemView {
     const add = actions.createEl("button", { cls: "ohd-button ohd-button-primary" });
     setIcon(add, "plus");
     add.createSpan({ text: "新建" });
-    add.addEventListener("click", () => this.createTaskFromPrompt());
+    add.addEventListener("click", () => this.openAddTaskModal());
 
     const sync = actions.createEl("button", { text: "同步滴答", cls: "ohd-button ohd-button-ghost" });
     sync.addEventListener("click", async () => {
       const ok = await this.adapter.sync();
       new Notice(ok ? "已触发滴答同步" : "未检测到 Obsidian-DidaSync 同步能力");
-      this.render();
+      this.scheduleRefresh("tasks");
     });
   }
 
-  private renderTodayCard(container: HTMLElement): void {
-    const card = container.createDiv("ohd-card ohd-today-card");
+  private renderToday(): void {
+    if (!this.todaySection) return;
+    const card = this.todaySection;
+    card.empty();
     const dailyPath = getTodayDailyPath(this.plugin.settings);
     const top = card.createDiv("ohd-card-top");
     top.createEl("h2", { text: "今日笔记" });
     top.createSpan({ text: "Notebook", cls: "ohd-code-pill" });
 
     const body = card.createDiv("ohd-daily-main");
-    body.createDiv({ text: dailyPath.replace(".md", ""), cls: "ohd-daily-title" });
+    body.createDiv({ text: dailyPath.replace(/\.md$/, ""), cls: "ohd-daily-title" });
     body.createDiv({ text: "连接每日记录和今天的滴答任务", cls: "ohd-muted" });
 
     const week = card.createDiv("ohd-week-strip");
+    const today = new Date();
+    const dayIndex = (today.getDay() + 6) % 7; // Mon=0 .. Sun=6
+    const monday = new Date(today);
+    monday.setDate(today.getDate() - dayIndex);
     ["一", "二", "三", "四", "五", "六", "日"].forEach((day, index) => {
-      const item = week.createDiv(index === 6 ? "ohd-week-day active" : "ohd-week-day");
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + index);
+      const item = week.createDiv(index === dayIndex ? "ohd-week-day active" : "ohd-week-day");
       item.createSpan({ text: day });
-      item.createSpan({ text: String(11 + index) });
+      item.createSpan({ text: String(d.getDate()) });
     });
+
+    this.agendaSection = card.createDiv("ohd-today-agenda");
+    this.renderTodayAgenda();
 
     const actions = card.createDiv("ohd-card-actions");
     const open = actions.createEl("button", { text: "打开今日", cls: "ohd-button ohd-button-primary" });
-    open.addEventListener("click", async () => {
-      const file = this.app.vault.getAbstractFileByPath(dailyPath);
-      if (file instanceof TFile) {
-        await this.app.workspace.getLeaf(false).openFile(file);
-      } else {
-        const created = await this.app.vault.create(dailyPath, "");
-        await this.app.workspace.getLeaf(false).openFile(created);
-      }
-    });
+    open.addEventListener("click", () => void this.openOrCreateDaily(dailyPath));
     const quick = actions.createEl("button", { text: "写一条", cls: "ohd-button ohd-button-ghost" });
-    quick.addEventListener("click", () => void openPath(this.app, dailyPath));
+    quick.addEventListener("click", () => void this.openOrCreateDaily(dailyPath));
   }
 
-  private renderTaskCard(container: HTMLElement): void {
-    const card = container.createDiv("ohd-card ohd-task-card");
+  private async openOrCreateDaily(path: string): Promise<void> {
+    const normalized = normalizePath(path);
+    const existing = this.app.vault.getAbstractFileByPath(normalized);
+    if (existing instanceof TFile) {
+      await this.app.workspace.getLeaf(false).openFile(existing);
+      return;
+    }
+    const folder = normalized.includes("/") ? normalized.slice(0, normalized.lastIndexOf("/")) : "";
+    if (folder && !this.app.vault.getAbstractFileByPath(folder)) {
+      try {
+        await this.app.vault.createFolder(folder);
+      } catch {
+        /* folder may already exist after race; ignore */
+      }
+    }
+    try {
+      const created = await this.app.vault.create(normalized, "");
+      await this.app.workspace.getLeaf(false).openFile(created);
+      this.scheduleRefresh("vault");
+    } catch (err) {
+      new Notice("无法创建今日笔记");
+      console.error("[home-dashboard] create daily failed", err);
+    }
+  }
+
+  private renderTodayAgenda(): void {
+    if (!this.agendaSection) return;
+    const section = this.agendaSection;
+    section.empty();
+
+    const plan = buildTaskPlan(this.adapter.getTasks());
+    const items = getTodayAgenda(plan);
+
+    const head = section.createDiv("ohd-agenda-head");
+    head.createEl("h3", { text: "今日议程" });
+    head.createSpan({ text: String(items.length), cls: "ohd-chip" });
+
+    if (items.length === 0) {
+      const empty = section.createDiv("ohd-empty");
+      empty.createDiv({ text: "今天暂无安排", cls: "ohd-muted" });
+      const add = empty.createEl("button", { text: "新建任务", cls: "ohd-button ohd-button-ghost" });
+      add.addEventListener("click", () => this.openAddTaskModal());
+      return;
+    }
+
+    const visible = getVisibleTasks(items, this.expandedTaskSections.agenda);
+    const list = section.createDiv("ohd-task-list");
+    visible.items.forEach((task) => {
+      const row = list.createDiv(`ohd-task-row ${task.bucket}`);
+      row.setAttribute("role", "button");
+      row.setAttribute("tabindex", "0");
+      const dot = row.createEl("button", { cls: "ohd-task-dot", attr: { "aria-label": "切换完成状态" } });
+      if (task.status === 2) dot.textContent = "✓";
+      const toggle = async () => {
+        const ok = await this.adapter.toggleTask(taskKey(task));
+        if (!ok) new Notice("无法通过 Obsidian-DidaSync 勾选该任务");
+        this.scheduleRefresh("tasks");
+      };
+      dot.addEventListener("click", (event) => {
+        event.stopPropagation();
+        void toggle();
+      });
+      row.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          void toggle();
+        }
+      });
+      const meta = row.createDiv("ohd-task-meta");
+      meta.createDiv({ text: task.title, cls: "ohd-task-title" });
+      const sub = meta.createDiv("ohd-task-sub");
+      sub.createSpan({ text: task.projectName || task.projectId || "收集箱", cls: "ohd-code-pill" });
+      if (task.effectiveDate) sub.createSpan({ text: formatTime(task.effectiveDate.getTime()), cls: "ohd-soft-pill" });
+      if (task.bucket === "overdue") sub.createSpan({ text: "逾期", cls: "ohd-soft-pill danger" });
+    });
+
+    if (items.length > 5) {
+      const more = section.createEl("button", {
+        text: this.expandedTaskSections.agenda ? "收起" : `查看全部 ${visible.hiddenCount}`,
+        cls: "ohd-button ohd-button-ghost ohd-task-more",
+        attr: { type: "button" }
+      });
+      more.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        this.expandedTaskSections.agenda = !this.expandedTaskSections.agenda;
+        this.renderTodayAgenda();
+      });
+    }
+  }
+
+  private renderTasks(): void {
+    if (!this.taskSection) return;
+    const card = this.taskSection;
+    card.empty();
     const state = this.adapter.getState();
     const plan = buildTaskPlan(this.adapter.getTasks());
 
@@ -166,132 +323,174 @@ export class HomeDashboardView extends ItemView {
     const add = addRow.createEl("button", { cls: "ohd-button ohd-button-primary" });
     setIcon(add, "plus");
     add.createSpan({ text: "添加" });
-    add.addEventListener("click", () => this.addTask(input));
+    add.addEventListener("click", () => void this.addTask(input));
     input.addEventListener("keydown", (event) => {
       if (event.key === "Enter") void this.addTask(input);
     });
 
-    const columns = card.createDiv("ohd-task-columns");
-    const current = columns.createDiv("ohd-task-column");
-    current.createEl("h3", { text: "当前要处理" });
-    this.renderTaskList(current, plan.current, "current");
-
-    const range = columns.createDiv("ohd-task-column");
+    const range = card.createDiv("ohd-task-column");
     const rangeHeader = range.createDiv("ohd-task-range-head");
     rangeHeader.createEl("h3", { text: this.taskRange === "week" ? "本周计划" : "全部任务" });
     const switcher = rangeHeader.createDiv("ohd-segment");
     const weekBtn = switcher.createEl("button", { text: "本周", cls: this.taskRange === "week" ? "active" : "" });
-    const allBtn = switcher.createEl("button", { text: "全部" , cls: this.taskRange === "all" ? "active" : "" });
+    const allBtn = switcher.createEl("button", { text: "全部", cls: this.taskRange === "all" ? "active" : "" });
     weekBtn.addEventListener("click", () => {
       this.taskRange = "week";
       this.expandedTaskSections.range = false;
-      this.render();
+      this.renderTasks();
     });
     allBtn.addEventListener("click", () => {
       this.taskRange = "all";
       this.expandedTaskSections.range = false;
-      this.render();
+      this.renderTasks();
     });
 
     const rangeTasks = this.taskRange === "week" ? plan.week : plan.allOpen;
     if (rangeTasks.length === 0 && this.taskRange === "week") {
       const empty = range.createDiv("ohd-empty");
       empty.createDiv({ text: "本周暂无安排" });
-      const showAll = empty.createEl("button", { text: `查看全部 ${plan.counts.open}`, cls: "ohd-button ohd-button-ghost" });
+      const showAll = empty.createEl("button", {
+        text: `查看全部 ${plan.counts.open}`,
+        cls: "ohd-button ohd-button-ghost"
+      });
       showAll.addEventListener("click", () => {
         this.taskRange = "all";
-        this.render();
+        this.renderTasks();
       });
     } else {
-      this.renderTaskList(range, rangeTasks, "range");
+      this.renderTaskList(range, rangeTasks);
     }
   }
 
-  private renderTaskList(container: HTMLElement, tasks: PlannedTask[], mode: "current" | "range"): void {
-    const visible = getVisibleTasks(tasks, this.expandedTaskSections[mode]);
+  private renderTaskList(container: HTMLElement, tasks: PlannedTask[]): void {
+    const visible = getVisibleTasks(tasks, this.expandedTaskSections.range);
     const list = container.createDiv("ohd-task-list");
     visible.items.forEach((task) => {
       const row = list.createDiv(`ohd-task-row ${task.bucket}`);
+      row.setAttribute("role", "button");
+      row.setAttribute("tabindex", "0");
       const dot = row.createEl("button", { cls: "ohd-task-dot", attr: { "aria-label": "切换完成状态" } });
       if (task.status === 2) dot.textContent = "✓";
-      dot.addEventListener("click", async () => {
-        const ok = await this.adapter.toggleTask(taskId(task));
+      const toggle = async () => {
+        const ok = await this.adapter.toggleTask(taskKey(task));
         if (!ok) new Notice("无法通过 Obsidian-DidaSync 勾选该任务");
-        this.render();
+        this.scheduleRefresh("tasks");
+      };
+      dot.addEventListener("click", (event) => {
+        event.stopPropagation();
+        void toggle();
+      });
+      row.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          void toggle();
+        }
       });
       const meta = row.createDiv("ohd-task-meta");
       meta.createDiv({ text: task.title, cls: "ohd-task-title" });
       const sub = meta.createDiv("ohd-task-sub");
       sub.createSpan({ text: task.projectName || task.projectId || "收集箱", cls: "ohd-code-pill" });
       if (task.effectiveDate) sub.createSpan({ text: formatTime(task.effectiveDate.getTime()), cls: "ohd-soft-pill" });
-      if (mode === "current" && task.bucket === "overdue") sub.createSpan({ text: "逾期", cls: "ohd-soft-pill danger" });
     });
 
     if (tasks.length > 5) {
       const more = container.createEl("button", {
-        text: this.expandedTaskSections[mode] ? "收起" : `查看全部 ${visible.hiddenCount}`,
+        text: this.expandedTaskSections.range ? "收起" : `查看全部 ${visible.hiddenCount}`,
         cls: "ohd-button ohd-button-ghost ohd-task-more",
         attr: { type: "button" }
       });
       more.addEventListener("click", (event) => {
         event.preventDefault();
         event.stopPropagation();
-        this.expandedTaskSections[mode] = !this.expandedTaskSections[mode];
-        this.render();
+        this.expandedTaskSections.range = !this.expandedTaskSections.range;
+        this.renderTasks();
       });
     }
   }
 
-  private renderFocusCard(container: HTMLElement): void {
-    const card = container.createDiv("ohd-card ohd-focus-card");
+  private renderFocus(): void {
+    if (!this.focusSection) return;
+    const card = this.focusSection;
+    card.empty();
     const top = card.createDiv("ohd-card-top");
     top.createEl("h2", { text: "工作焦点" });
     top.createSpan({ text: "Local", cls: "ohd-code-pill" });
+    const focus = getWorkFocus(this.app, this.plugin.settings);
+    if (focus.length === 0) {
+      card.createDiv({ text: "未配置工作焦点目录", cls: "ohd-muted" });
+      return;
+    }
     const list = card.createDiv("ohd-focus-list");
-    getWorkFocus(this.app, this.plugin.settings).forEach((item) => {
+    focus.forEach((item) => {
       const row = list.createDiv("ohd-focus-row");
+      row.setAttribute("role", "button");
+      row.setAttribute("tabindex", "0");
       const icon = row.createDiv("ohd-focus-icon");
       setIcon(icon, item.label.includes("Excalidraw") ? "pen-tool" : "folder-kanban");
       const main = row.createDiv("ohd-focus-main");
       main.createDiv({ text: item.label, cls: "ohd-focus-title" });
       main.createDiv({ text: item.latest?.path || item.path, cls: "ohd-muted" });
       row.createSpan({ text: `${item.count}`, cls: "ohd-soft-pill" });
-      row.addEventListener("click", () => void openPath(this.app, item.latest?.path || item.path));
+      const go = () => void openPath(this.app, item.latest?.path || item.path);
+      row.addEventListener("click", go);
+      row.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          go();
+        }
+      });
     });
   }
 
-  private renderRecentCard(container: HTMLElement): void {
-    const card = container.createDiv("ohd-card ohd-recent-card");
+  private renderRecent(): void {
+    if (!this.recentSection) return;
+    const card = this.recentSection;
+    card.empty();
     card.createEl("h2", { text: "最近编辑" });
-    const recent = getRecentMarkdownFiles(this.app, this.plugin.settings.recentLimit);
+    const recent = getRecentMarkdownFiles(this.app, this.plugin.settings);
+    if (recent.length === 0) {
+      card.createDiv({ text: "暂无最近编辑", cls: "ohd-muted" });
+      return;
+    }
     const list = card.createDiv("ohd-recent-list");
     recent.forEach((file) => this.renderRecentRow(list, file));
   }
 
   private renderRecentRow(container: HTMLElement, file: RecentFileItem): void {
     const row = container.createDiv("ohd-recent-row");
+    row.setAttribute("role", "button");
+    row.setAttribute("tabindex", "0");
     const icon = row.createDiv("ohd-recent-icon");
-    setIcon(icon, file.path.startsWith("Excalidraw/") ? "pencil-ruler" : "file-text");
+    setIcon(icon, file.path.startsWith("Excalidraw/") || file.path.endsWith(".excalidraw.md") ? "pencil-ruler" : "file-text");
     const main = row.createDiv("ohd-recent-main");
     main.createDiv({ text: file.basename, cls: "ohd-recent-title" });
     main.createDiv({ text: file.folder || "/", cls: "ohd-muted" });
     row.createSpan({ text: formatTime(file.mtime), cls: "ohd-soft-pill" });
-    row.addEventListener("click", () => void openPath(this.app, file.path));
+    const go = () => void openPath(this.app, file.path);
+    row.addEventListener("click", go);
+    row.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        go();
+      }
+    });
   }
 
-  private renderOverview(container: HTMLElement): void {
+  private renderOverview(): void {
+    if (!this.overviewSection) return;
+    this.overviewSection.empty();
     const state = this.adapter.getState();
-    const overview = getVaultOverview(this.app);
-    const bar = container.createDiv("ohd-overview");
-    [
+    const overview = getVaultOverview(this.app, this.plugin.settings);
+    const entries: Array<[string, string | number]> = [
       ["笔记", overview.noteCount],
       ["未完成", buildTaskPlan(this.adapter.getTasks()).counts.open],
       ["图稿", overview.drawingCount],
       ["同步", state.connected ? `${state.syncInterval ?? "-"}min` : "未连接"]
-    ].forEach(([label, value]) => {
-      const item = bar.createDiv("ohd-overview-item");
+    ];
+    entries.forEach(([label, value]) => {
+      const item = this.overviewSection!.createDiv("ohd-overview-item");
       item.createSpan({ text: String(value), cls: "ohd-overview-value" });
-      item.createSpan({ text: String(label), cls: "ohd-muted" });
+      item.createSpan({ text: label, cls: "ohd-muted" });
     });
   }
 
@@ -301,15 +500,14 @@ export class HomeDashboardView extends ItemView {
     const ok = await this.adapter.addInboxTask(title);
     new Notice(ok ? "已添加到滴答收集箱" : "未检测到 Obsidian-DidaSync，无法添加任务");
     input.value = "";
-    this.render();
+    this.scheduleRefresh("tasks");
   }
 
-  private async createTaskFromPrompt(): Promise<void> {
-    const title = window.prompt("添加到滴答收集箱");
-    if (title?.trim()) {
-      const ok = await this.adapter.addInboxTask(title.trim());
+  private openAddTaskModal(): void {
+    new InboxTaskModal(this.app, async (title) => {
+      const ok = await this.adapter.addInboxTask(title);
       new Notice(ok ? "已添加到滴答收集箱" : "未检测到 Obsidian-DidaSync，无法添加任务");
-      this.render();
-    }
+      this.scheduleRefresh("tasks");
+    }).open();
   }
 }

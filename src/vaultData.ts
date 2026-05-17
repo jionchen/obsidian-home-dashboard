@@ -22,10 +22,13 @@ export type VaultOverview = {
 
 const isMarkdown = (file: TFile) => file.extension === "md";
 
-const isIgnoredPath = (path: string) =>
-  path.startsWith(".obsidian/") ||
-  path.startsWith("attachments/") ||
-  path.includes("/raw/");
+export function makePathFilter(settings: HomeDashboardSettings) {
+  const prefixes = settings.ignoredPathPrefixes
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0)
+    .map((p) => (p.endsWith("/") ? p : `${p}/`));
+  return (path: string) => prefixes.some((prefix) => path.startsWith(prefix));
+}
 
 const dirname = (path: string) => {
   const index = path.lastIndexOf("/");
@@ -39,12 +42,13 @@ export function getTodayDailyPath(settings: HomeDashboardSettings, date = new Da
   return `${settings.dailyNoteFolder}/${yyyy}-${mm}-${dd}.md`;
 }
 
-export function getRecentMarkdownFiles(app: App, limit: number): RecentFileItem[] {
+export function getRecentMarkdownFiles(app: App, settings: HomeDashboardSettings): RecentFileItem[] {
+  const isIgnored = makePathFilter(settings);
   return app.vault
     .getFiles()
-    .filter((file) => isMarkdown(file) && !isIgnoredPath(file.path))
+    .filter((file) => isMarkdown(file) && !isIgnored(file.path))
     .sort((a, b) => b.stat.mtime - a.stat.mtime)
-    .slice(0, limit)
+    .slice(0, settings.recentLimit)
     .map((file) => ({
       path: file.path,
       basename: file.basename,
@@ -53,16 +57,18 @@ export function getRecentMarkdownFiles(app: App, limit: number): RecentFileItem[
     }));
 }
 
-export function getVaultOverview(app: App): VaultOverview {
+export function getVaultOverview(app: App, settings: HomeDashboardSettings): VaultOverview {
+  const isIgnored = makePathFilter(settings);
   const files = app.vault.getFiles();
   return {
-    noteCount: files.filter((file) => isMarkdown(file) && !isIgnoredPath(file.path)).length,
-    drawingCount: files.filter((file) => file.path.startsWith("Excalidraw/")).length
+    noteCount: files.filter((file) => isMarkdown(file) && !isIgnored(file.path)).length,
+    drawingCount: files.filter((file) => file.path.startsWith("Excalidraw/") || file.path.endsWith(".excalidraw.md")).length
   };
 }
 
 export function getWorkFocus(app: App, settings: HomeDashboardSettings): WorkFocusItem[] {
-  const files = app.vault.getFiles().filter((file) => isMarkdown(file) && !isIgnoredPath(file.path));
+  const isIgnored = makePathFilter(settings);
+  const files = app.vault.getFiles().filter((file) => isMarkdown(file) && !isIgnored(file.path));
   return settings.workFocusFolders.map((folder) => {
     const matches = files
       .filter((file) => file.path === folder || file.path.startsWith(`${folder}/`))
