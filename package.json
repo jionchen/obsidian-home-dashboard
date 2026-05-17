@@ -1,0 +1,28 @@
+{
+  "name": "obsidian-home-dashboard",
+  "version": "0.1.0",
+  "description": "A focused Obsidian home dashboard for daily notes, DidaSync tasks, work focus, and recent edits.",
+  "main": "main.js",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+    "test": "vitest run"
+  },
+  "keywords": [
+    "obsidian",
+    "plugin",
+    "dashboard",
+    "dida"
+  ],
+  "author": "chenjiao",
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "@types/node": "^20.12.12",
+    "builtin-modules": "^3.3.0",
+    "esbuild": "^0.21.5",
+    "obsidian": "latest",
+    "tslib": "^2.6.3",
+    "typescript": "^5.4.5",
+    "vitest": "^1.6.0"
+  }
+}

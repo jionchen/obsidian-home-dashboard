@@ -1,0 +1,10 @@
+{
+  "id": "home-dashboard",
+  "name": "Home Dashboard",
+  "version": "0.1.0",
+  "minAppVersion": "1.5.0",
+  "description": "A focused Obsidian home dashboard for daily notes, DidaSync tasks, work focus, and recent edits.",
+  "author": "chenjiao",
+  "authorUrl": "https://github.com/jionchen",
+  "isDesktopOnly": false
+}
