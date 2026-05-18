@@ -11,6 +11,8 @@ import {
   type RecentFileItem
 } from "./vaultData";
 import { InboxTaskModal } from "./InboxTaskModal";
+import { NoteCreateModal } from "./NoteCreateModal";
+import { createAndOpenNote } from "./noteCreate";
 import { openOrCreateDaily } from "./dailyNote";
 import { NoteSearchSuggest } from "./SearchSuggest";
 
@@ -167,14 +169,11 @@ export class HomeDashboardView extends ItemView {
     const add = actions.createEl("button", { cls: "ohd-button ohd-button-primary" });
     setIcon(add, "plus");
     add.createSpan({ text: "新建" });
-    add.addEventListener("click", () => this.openAddTaskModal());
+    add.addEventListener("click", () => this.openCreateNoteModal());
+  }
 
-    const sync = actions.createEl("button", { text: "同步滴答", cls: "ohd-button ohd-button-ghost" });
-    sync.addEventListener("click", async () => {
-      const ok = await this.adapter.sync();
-      new Notice(ok ? "已触发滴答同步" : "未检测到 Obsidian-DidaSync 同步能力");
-      this.scheduleRefresh("tasks");
-    });
+  private openCreateNoteModal(): void {
+    new NoteCreateModal(this.app, (raw) => createAndOpenNote(this.app, raw)).open();
   }
 
   private renderToday(): void {
@@ -209,8 +208,8 @@ export class HomeDashboardView extends ItemView {
     const actions = card.createDiv("ohd-card-actions");
     const open = actions.createEl("button", { text: "打开今日", cls: "ohd-button ohd-button-primary" });
     open.addEventListener("click", () => void this.openDaily());
-    const quick = actions.createEl("button", { text: "写一条", cls: "ohd-button ohd-button-ghost" });
-    quick.addEventListener("click", () => void this.openDaily());
+    const quick = actions.createEl("button", { text: "新增代办", cls: "ohd-button ohd-button-ghost" });
+    quick.addEventListener("click", () => this.openAddTaskModal());
   }
 
   private async openDaily(): Promise<void> {
@@ -302,15 +301,26 @@ export class HomeDashboardView extends ItemView {
     stats.createSpan({ text: `逾期 ${plan.counts.overdue}`, cls: "ohd-chip danger" });
     stats.createSpan({ text: `今天 ${plan.counts.today}`, cls: "ohd-chip primary" });
     stats.createSpan({ text: `未完成 ${plan.counts.open}`, cls: "ohd-chip" });
+    const syncBtn = stats.createEl("button", { text: "同步", cls: "ohd-button ohd-button-ghost ohd-button-compact" });
+    syncBtn.addEventListener("click", async () => {
+      const ok = await this.adapter.sync();
+      new Notice(ok ? "已触发滴答同步" : "未检测到 Obsidian-DidaSync 同步能力");
+      this.scheduleRefresh("tasks");
+    });
 
     const addRow = card.createDiv("ohd-task-add");
     const input = addRow.createEl("input", { type: "text", placeholder: "添加到收集箱...", cls: "ohd-input" });
     const add = addRow.createEl("button", { cls: "ohd-button ohd-button-primary" });
     setIcon(add, "plus");
     add.createSpan({ text: "添加" });
-    add.addEventListener("click", () => void this.addTask(input));
+    const triggerAdd = () => {
+      const value = input.value;
+      input.value = "";
+      this.openAddTaskModal(value);
+    };
+    add.addEventListener("click", triggerAdd);
     input.addEventListener("keydown", (event) => {
-      if (event.key === "Enter") void this.addTask(input);
+      if (event.key === "Enter") triggerAdd();
     });
 
     const range = card.createDiv("ohd-task-column");
@@ -481,20 +491,15 @@ export class HomeDashboardView extends ItemView {
     });
   }
 
-  private async addTask(input: HTMLInputElement): Promise<void> {
-    const title = input.value.trim();
-    if (!title) return;
-    const ok = await this.adapter.addInboxTask(title);
-    new Notice(ok ? "已添加到滴答收集箱" : "未检测到 Obsidian-DidaSync，无法添加任务");
-    input.value = "";
-    this.scheduleRefresh("tasks");
-  }
-
-  private openAddTaskModal(): void {
-    new InboxTaskModal(this.app, async (title, dueDate) => {
-      const ok = await this.adapter.addInboxTask(title, dueDate);
-      new Notice(ok ? "已添加到滴答收集箱" : "未检测到 Obsidian-DidaSync，无法添加任务");
-      this.scheduleRefresh("tasks");
-    }).open();
+  private openAddTaskModal(initialTitle?: string): void {
+    new InboxTaskModal(
+      this.app,
+      async (title, dueDate) => {
+        const ok = await this.adapter.addInboxTask(title, dueDate);
+        new Notice(ok ? "已添加到滴答收集箱" : "未检测到 Obsidian-DidaSync，无法添加任务");
+        this.scheduleRefresh("tasks");
+      },
+      initialTitle
+    ).open();
   }
 }

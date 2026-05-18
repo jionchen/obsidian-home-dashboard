@@ -4,6 +4,8 @@ import { DEFAULT_SETTINGS, type HomeDashboardSettings } from "./settings";
 import { HomeDashboardSettingTab } from "./settingsTab";
 import { openOrCreateDaily } from "./dailyNote";
 import { InboxTaskModal } from "./InboxTaskModal";
+import { NoteCreateModal } from "./NoteCreateModal";
+import { createAndOpenNote } from "./noteCreate";
 import { DidaSyncAdapter } from "./didaSyncAdapter";
 
 export default class HomeDashboardPlugin extends Plugin {
@@ -56,6 +58,14 @@ export default class HomeDashboardPlugin extends Plugin {
             if (view instanceof HomeDashboardView) view.onSettingsChange();
           });
         }).open();
+      }
+    });
+
+    this.addCommand({
+      id: "new-note",
+      name: "New note",
+      callback: () => {
+        new NoteCreateModal(this.app, (raw) => createAndOpenNote(this.app, raw)).open();
       }
     });
 

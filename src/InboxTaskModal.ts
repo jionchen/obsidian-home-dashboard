@@ -22,11 +22,12 @@ const endOfDayPlus = (offsetDays: number): Date => {
 };
 
 export class InboxTaskModal extends Modal {
-  private title = "";
+  private title: string;
   private preset: DatePresetKey = "none";
 
-  constructor(app: App, private readonly onSubmit: InboxTaskSubmit) {
+  constructor(app: App, private readonly onSubmit: InboxTaskSubmit, initialTitle?: string) {
     super(app);
+    this.title = initialTitle?.trim() ?? "";
   }
 
   onOpen(): void {
@@ -38,10 +39,14 @@ export class InboxTaskModal extends Modal {
       .addText((text) => {
         text.setPlaceholder("输入任务名");
         text.inputEl.style.width = "100%";
+        if (this.title) text.setValue(this.title);
         text.onChange((value) => {
           this.title = value;
         });
-        window.setTimeout(() => text.inputEl.focus(), 0);
+        window.setTimeout(() => {
+          text.inputEl.focus();
+          text.inputEl.select();
+        }, 0);
         text.inputEl.addEventListener("keydown", (event) => {
           if (event.key === "Enter") {
             event.preventDefault();
