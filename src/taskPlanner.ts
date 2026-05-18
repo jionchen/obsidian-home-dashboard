@@ -49,7 +49,7 @@ const rollingWeekEnd = (date: Date) => {
   return new Date(start.getFullYear(), start.getMonth(), start.getDate() + 7);
 };
 
-const parseTaskDate = (task: DidaTaskLike) => {
+export const parseTaskDate = (task: DidaTaskLike) => {
   const raw = task.startDate || task.dueDate;
   if (!raw) return undefined;
   const normalized = raw.replace(/([+-]\d{2})(\d{2})$/, "$1:$2");

@@ -480,6 +480,23 @@ body.theme-dark .ohd-root {
   padding: 12px;
 }
 
+.ohd-suggest-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 10px;
+}
+
+.ohd-suggest-title {
+  color: var(--text-normal);
+  font-weight: 700;
+}
+
+.ohd-suggest-folder {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
 @media (max-width: 1100px) {
   .ohd-header {
     align-items: flex-start;

@@ -49,4 +49,39 @@ describe("DidaSyncAdapter", () => {
     expect(toggled).toBe(true);
     expect(toggleTask).toHaveBeenCalledWith(0);
   });
+
+  it("returns false when adapter has no Dida plugin to write to", async () => {
+    const adapter = new DidaSyncAdapter({ plugins: { plugins: {} } });
+    expect(await adapter.addInboxTask("孤儿任务")).toBe(false);
+  });
+
+  it("preserves both tasks when two addInboxTask calls run concurrently", async () => {
+    const tasks: unknown[] = [];
+    const saveSettings = vi.fn(async () => {
+      await new Promise((r) => setTimeout(r, 10));
+    });
+    const createTaskInDidaList = vi.fn(async () => {});
+    const refreshTaskView = vi.fn();
+    const adapter = new DidaSyncAdapter({
+      plugins: {
+        plugins: {
+          [DIDA_SYNC_PLUGIN_ID]: {
+            settings: { tasks: tasks as never },
+            saveSettings,
+            createTaskInDidaList,
+            refreshTaskView
+          }
+        }
+      }
+    });
+
+    const [a, b] = await Promise.all([adapter.addInboxTask("任务 A"), adapter.addInboxTask("任务 B")]);
+
+    expect(a).toBe(true);
+    expect(b).toBe(true);
+    expect(tasks).toHaveLength(2);
+    expect((tasks as Array<{ title: string }>).map((t) => t.title).sort()).toEqual(["任务 A", "任务 B"]);
+    expect(saveSettings).toHaveBeenCalledTimes(2);
+    expect(createTaskInDidaList).toHaveBeenCalledTimes(2);
+  });
 });

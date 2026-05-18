@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildTaskPlan, getTodayAgenda, getVisibleTasks, type DidaTaskLike } from "../src/taskPlanner";
+import { buildTaskPlan, getTodayAgenda, getVisibleTasks, parseTaskDate, type DidaTaskLike } from "../src/taskPlanner";
 
 describe("buildTaskPlan", () => {
   const now = new Date("2026-05-17T10:00:00+08:00");
@@ -85,5 +85,50 @@ describe("getTodayAgenda", () => {
     ];
     const plan = buildTaskPlan(tasks, now);
     expect(getTodayAgenda(plan)).toEqual([]);
+  });
+});
+
+describe("parseTaskDate", () => {
+  it("parses Dida's +0800 offset by inserting the colon", () => {
+    const d = parseTaskDate({ title: "", status: 0, startDate: "2026-05-17T09:00:00+0800" });
+    expect(d).toBeInstanceOf(Date);
+    expect(d!.toISOString()).toBe("2026-05-17T01:00:00.000Z");
+  });
+
+  it("parses ISO with explicit +08:00 offset", () => {
+    const d = parseTaskDate({ title: "", status: 0, startDate: "2026-05-17T09:00:00+08:00" });
+    expect(d!.toISOString()).toBe("2026-05-17T01:00:00.000Z");
+  });
+
+  it("parses UTC Z suffix", () => {
+    const d = parseTaskDate({ title: "", status: 0, startDate: "2026-05-17T01:00:00Z" });
+    expect(d!.toISOString()).toBe("2026-05-17T01:00:00.000Z");
+  });
+
+  it("parses date with no timezone (treated as local)", () => {
+    const d = parseTaskDate({ title: "", status: 0, startDate: "2026-05-17T09:00:00" });
+    expect(d).toBeInstanceOf(Date);
+    expect(Number.isNaN(d!.getTime())).toBe(false);
+  });
+
+  it("prefers startDate over dueDate when both present", () => {
+    const d = parseTaskDate({
+      title: "",
+      status: 0,
+      startDate: "2026-05-17T09:00:00+0800",
+      dueDate: "2026-06-01T09:00:00+0800"
+    });
+    expect(d!.toISOString()).toBe("2026-05-17T01:00:00.000Z");
+  });
+
+  it("falls back to dueDate when startDate missing", () => {
+    const d = parseTaskDate({ title: "", status: 0, dueDate: "2026-05-17T09:00:00+0800" });
+    expect(d!.toISOString()).toBe("2026-05-17T01:00:00.000Z");
+  });
+
+  it("returns undefined when both dates are missing or invalid", () => {
+    expect(parseTaskDate({ title: "", status: 0 })).toBeUndefined();
+    expect(parseTaskDate({ title: "", status: 0, startDate: "" })).toBeUndefined();
+    expect(parseTaskDate({ title: "", status: 0, startDate: "not a date" })).toBeUndefined();
   });
 });

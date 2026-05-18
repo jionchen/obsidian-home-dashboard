@@ -1,4 +1,4 @@
-import { ItemView, Notice, TFile, WorkspaceLeaf, normalizePath, setIcon } from "obsidian";
+import { ItemView, Notice, WorkspaceLeaf, setIcon } from "obsidian";
 import type HomeDashboardPlugin from "./main";
 import { DidaSyncAdapter } from "./didaSyncAdapter";
 import { buildTaskPlan, getTodayAgenda, getVisibleTasks, type PlannedTask } from "./taskPlanner";
@@ -11,6 +11,8 @@ import {
   type RecentFileItem
 } from "./vaultData";
 import { InboxTaskModal } from "./InboxTaskModal";
+import { openOrCreateDaily } from "./dailyNote";
+import { NoteSearchSuggest } from "./SearchSuggest";
 
 export const HOME_DASHBOARD_VIEW_TYPE = "home-dashboard-view";
 
@@ -152,6 +154,7 @@ export class HomeDashboardView extends ItemView {
       placeholder: "搜索笔记 / 输入命令",
       cls: "ohd-search"
     });
+    new NoteSearchSuggest(this.app, search);
     search.addEventListener("keydown", (event) => {
       if (event.key === "Enter") {
         const command = search.value.trim();
@@ -203,34 +206,14 @@ export class HomeDashboardView extends ItemView {
 
     const actions = card.createDiv("ohd-card-actions");
     const open = actions.createEl("button", { text: "打开今日", cls: "ohd-button ohd-button-primary" });
-    open.addEventListener("click", () => void this.openOrCreateDaily(dailyPath));
+    open.addEventListener("click", () => void this.openDaily());
     const quick = actions.createEl("button", { text: "写一条", cls: "ohd-button ohd-button-ghost" });
-    quick.addEventListener("click", () => void this.openOrCreateDaily(dailyPath));
+    quick.addEventListener("click", () => void this.openDaily());
   }
 
-  private async openOrCreateDaily(path: string): Promise<void> {
-    const normalized = normalizePath(path);
-    const existing = this.app.vault.getAbstractFileByPath(normalized);
-    if (existing instanceof TFile) {
-      await this.app.workspace.getLeaf(false).openFile(existing);
-      return;
-    }
-    const folder = normalized.includes("/") ? normalized.slice(0, normalized.lastIndexOf("/")) : "";
-    if (folder && !this.app.vault.getAbstractFileByPath(folder)) {
-      try {
-        await this.app.vault.createFolder(folder);
-      } catch {
-        /* folder may already exist after race; ignore */
-      }
-    }
-    try {
-      const created = await this.app.vault.create(normalized, "");
-      await this.app.workspace.getLeaf(false).openFile(created);
-      this.scheduleRefresh("vault");
-    } catch (err) {
-      new Notice("无法创建今日笔记");
-      console.error("[home-dashboard] create daily failed", err);
-    }
+  private async openDaily(): Promise<void> {
+    await openOrCreateDaily(this.app, this.plugin.settings);
+    this.scheduleRefresh("vault");
   }
 
   private renderTodayAgenda(): void {
