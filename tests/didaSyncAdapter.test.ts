@@ -84,4 +84,74 @@ describe("DidaSyncAdapter", () => {
     expect(saveSettings).toHaveBeenCalledTimes(2);
     expect(createTaskInDidaList).toHaveBeenCalledTimes(2);
   });
+
+  it("returns false when updateTask cannot find the target", async () => {
+    const adapter = new DidaSyncAdapter({
+      plugins: {
+        plugins: {
+          [DIDA_SYNC_PLUGIN_ID]: { settings: { tasks: [{ id: "x", title: "存量", status: 0 }] } }
+        }
+      }
+    });
+    expect(await adapter.updateTask("missing", { title: "新名" })).toBe(false);
+  });
+
+  it("updateTask mutates title, applies date changes, and pushes to remote", async () => {
+    const task = { id: "abc", title: "原标题", status: 0, startDate: "2026-05-17T01:00:00.000Z", dueDate: "2026-05-17T01:00:00.000Z" };
+    const saveSettings = vi.fn(async () => {});
+    const refreshTaskView = vi.fn();
+    const updateTaskContentInDidaList = vi.fn(async () => {});
+    const adapter = new DidaSyncAdapter({
+      plugins: {
+        plugins: {
+          [DIDA_SYNC_PLUGIN_ID]: {
+            settings: { tasks: [task] },
+            saveSettings,
+            refreshTaskView,
+            updateTaskContentInDidaList
+          }
+        }
+      }
+    });
+
+    const due = new Date("2026-05-20T15:59:00.000Z");
+    const ok = await adapter.updateTask("abc", { title: "新标题", dueDate: due });
+    expect(ok).toBe(true);
+    expect(task.title).toBe("新标题");
+    expect(task.startDate).toBe(due.toISOString());
+    expect(task.dueDate).toBe(due.toISOString());
+    expect(saveSettings).toHaveBeenCalledTimes(1);
+    expect(refreshTaskView).toHaveBeenCalledTimes(1);
+    expect(updateTaskContentInDidaList).toHaveBeenCalledWith(task);
+  });
+
+  it("updateTask clears startDate and dueDate when dueDate is null", async () => {
+    const task: Record<string, unknown> = { id: "abc", title: "原标题", status: 0, startDate: "2026-05-17T01:00:00.000Z", dueDate: "2026-05-17T01:00:00.000Z" };
+    const adapter = new DidaSyncAdapter({
+      plugins: {
+        plugins: {
+          [DIDA_SYNC_PLUGIN_ID]: { settings: { tasks: [task as never] } }
+        }
+      }
+    });
+    expect(await adapter.updateTask("abc", { dueDate: null })).toBe(true);
+    expect("startDate" in task).toBe(false);
+    expect("dueDate" in task).toBe(false);
+  });
+
+  it("updateTask leaves dates untouched when dueDate is undefined", async () => {
+    const original = { id: "abc", title: "原标题", status: 0, startDate: "2026-05-17T01:00:00.000Z", dueDate: "2026-05-17T01:00:00.000Z" };
+    const task = { ...original };
+    const adapter = new DidaSyncAdapter({
+      plugins: {
+        plugins: {
+          [DIDA_SYNC_PLUGIN_ID]: { settings: { tasks: [task] } }
+        }
+      }
+    });
+    expect(await adapter.updateTask("abc", { title: "新名" })).toBe(true);
+    expect(task.title).toBe("新名");
+    expect(task.startDate).toBe(original.startDate);
+    expect(task.dueDate).toBe(original.dueDate);
+  });
 });

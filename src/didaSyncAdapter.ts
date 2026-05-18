@@ -10,6 +10,7 @@ type DidaSyncPluginLike = {
   };
   toggleTask?: (index: number) => unknown | Promise<unknown>;
   createTaskInDidaList?: (task: DidaTaskLike) => unknown | Promise<unknown>;
+  updateTaskContentInDidaList?: (task: DidaTaskLike) => unknown | Promise<unknown>;
   saveSettings?: () => unknown | Promise<unknown>;
   refreshTaskView?: () => unknown;
   manualSync?: () => unknown | Promise<unknown>;
@@ -101,6 +102,35 @@ export class DidaSyncAdapter {
     plugin.refreshTaskView?.();
     if (plugin.createTaskInDidaList) {
       await plugin.createTaskInDidaList(task);
+    }
+    return true;
+  }
+
+  async updateTask(
+    taskId: string,
+    updates: { title?: string; dueDate?: Date | null }
+  ): Promise<boolean> {
+    const plugin = this.plugin;
+    const tasks = plugin?.settings?.tasks;
+    if (!plugin || !Array.isArray(tasks)) return false;
+    const index = tasks.findIndex((task) => task.didaId === taskId || task.id === taskId);
+    if (index < 0) return false;
+    const task = tasks[index];
+    if (updates.title !== undefined) {
+      task.title = updates.title;
+    }
+    if (updates.dueDate === null) {
+      delete task.startDate;
+      delete task.dueDate;
+    } else if (updates.dueDate instanceof Date) {
+      const iso = updates.dueDate.toISOString();
+      task.startDate = iso;
+      task.dueDate = iso;
+    }
+    await plugin.saveSettings?.();
+    plugin.refreshTaskView?.();
+    if (plugin.updateTaskContentInDidaList) {
+      await plugin.updateTaskContentInDidaList(task);
     }
     return true;
   }

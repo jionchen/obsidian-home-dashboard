@@ -239,34 +239,7 @@ export class HomeDashboardView extends ItemView {
 
     const visible = getVisibleTasks(items, this.expandedTaskSections.agenda);
     const list = section.createDiv("ohd-task-list");
-    visible.items.forEach((task) => {
-      const row = list.createDiv(`ohd-task-row ${task.bucket}`);
-      row.setAttribute("role", "button");
-      row.setAttribute("tabindex", "0");
-      const dot = row.createEl("button", { cls: "ohd-task-dot", attr: { "aria-label": "切换完成状态" } });
-      if (task.status === 2) dot.textContent = "✓";
-      const toggle = async () => {
-        const ok = await this.adapter.toggleTask(taskKey(task));
-        if (!ok) new Notice("无法通过 Obsidian-DidaSync 勾选该任务");
-        this.scheduleRefresh("tasks");
-      };
-      dot.addEventListener("click", (event) => {
-        event.stopPropagation();
-        void toggle();
-      });
-      row.addEventListener("keydown", (event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          void toggle();
-        }
-      });
-      const meta = row.createDiv("ohd-task-meta");
-      meta.createDiv({ text: task.title, cls: "ohd-task-title" });
-      const sub = meta.createDiv("ohd-task-sub");
-      sub.createSpan({ text: task.projectName || task.projectId || "收集箱", cls: "ohd-code-pill" });
-      if (task.effectiveDate) sub.createSpan({ text: formatTime(task.effectiveDate.getTime()), cls: "ohd-soft-pill" });
-      if (task.bucket === "overdue") sub.createSpan({ text: "逾期", cls: "ohd-soft-pill danger" });
-    });
+    visible.items.forEach((task) => this.renderTaskRow(list, task, { showOverduePill: true }));
 
     if (items.length > 5) {
       const more = section.createEl("button", {
@@ -362,33 +335,7 @@ export class HomeDashboardView extends ItemView {
   private renderTaskList(container: HTMLElement, tasks: PlannedTask[]): void {
     const visible = getVisibleTasks(tasks, this.expandedTaskSections.range);
     const list = container.createDiv("ohd-task-list");
-    visible.items.forEach((task) => {
-      const row = list.createDiv(`ohd-task-row ${task.bucket}`);
-      row.setAttribute("role", "button");
-      row.setAttribute("tabindex", "0");
-      const dot = row.createEl("button", { cls: "ohd-task-dot", attr: { "aria-label": "切换完成状态" } });
-      if (task.status === 2) dot.textContent = "✓";
-      const toggle = async () => {
-        const ok = await this.adapter.toggleTask(taskKey(task));
-        if (!ok) new Notice("无法通过 Obsidian-DidaSync 勾选该任务");
-        this.scheduleRefresh("tasks");
-      };
-      dot.addEventListener("click", (event) => {
-        event.stopPropagation();
-        void toggle();
-      });
-      row.addEventListener("keydown", (event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          void toggle();
-        }
-      });
-      const meta = row.createDiv("ohd-task-meta");
-      meta.createDiv({ text: task.title, cls: "ohd-task-title" });
-      const sub = meta.createDiv("ohd-task-sub");
-      sub.createSpan({ text: task.projectName || task.projectId || "收集箱", cls: "ohd-code-pill" });
-      if (task.effectiveDate) sub.createSpan({ text: formatTime(task.effectiveDate.getTime()), cls: "ohd-soft-pill" });
-    });
+    visible.items.forEach((task) => this.renderTaskRow(list, task, { showOverduePill: false }));
 
     if (tasks.length > 5) {
       const more = container.createEl("button", {
@@ -495,11 +442,66 @@ export class HomeDashboardView extends ItemView {
     new InboxTaskModal(
       this.app,
       async (title, dueDate) => {
-        const ok = await this.adapter.addInboxTask(title, dueDate);
+        const due = dueDate instanceof Date ? dueDate : undefined;
+        const ok = await this.adapter.addInboxTask(title, due);
         new Notice(ok ? "已添加到滴答收集箱" : "未检测到 Obsidian-DidaSync，无法添加任务");
         this.scheduleRefresh("tasks");
       },
-      initialTitle
+      { initialTitle }
     ).open();
+  }
+
+  private openEditTaskModal(task: PlannedTask): void {
+    new InboxTaskModal(
+      this.app,
+      async (title, dueDate) => {
+        const updates: { title?: string; dueDate?: Date | null } = { title };
+        if (dueDate !== undefined) updates.dueDate = dueDate;
+        const ok = await this.adapter.updateTask(taskKey(task), updates);
+        new Notice(ok ? "代办已更新" : "无法更新该代办");
+        this.scheduleRefresh("tasks");
+      },
+      {
+        initialTitle: task.title,
+        initialDueDate: task.effectiveDate,
+        modalTitle: "编辑代办",
+        submitLabel: "保存"
+      }
+    ).open();
+  }
+
+  private renderTaskRow(list: HTMLElement, task: PlannedTask, opts: { showOverduePill: boolean }): void {
+    const row = list.createDiv(`ohd-task-row ${task.bucket}`);
+    row.setAttribute("role", "button");
+    row.setAttribute("tabindex", "0");
+    const dot = row.createEl("button", { cls: "ohd-task-dot", attr: { "aria-label": "切换完成状态" } });
+    if (task.status === 2) dot.textContent = "✓";
+    const toggle = async () => {
+      const ok = await this.adapter.toggleTask(taskKey(task));
+      if (!ok) new Notice("无法通过 Obsidian-DidaSync 勾选该任务");
+      this.scheduleRefresh("tasks");
+    };
+    dot.addEventListener("click", (event) => {
+      event.stopPropagation();
+      void toggle();
+    });
+    row.addEventListener("click", (event) => {
+      if (event.target === dot || (event.target as HTMLElement | null)?.closest?.(".ohd-task-dot")) return;
+      this.openEditTaskModal(task);
+    });
+    row.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        this.openEditTaskModal(task);
+      }
+    });
+    const meta = row.createDiv("ohd-task-meta");
+    meta.createDiv({ text: task.title, cls: "ohd-task-title" });
+    const sub = meta.createDiv("ohd-task-sub");
+    sub.createSpan({ text: task.projectName || task.projectId || "收集箱", cls: "ohd-code-pill" });
+    if (task.effectiveDate) sub.createSpan({ text: formatTime(task.effectiveDate.getTime()), cls: "ohd-soft-pill" });
+    if (opts.showOverduePill && task.bucket === "overdue") {
+      sub.createSpan({ text: "逾期", cls: "ohd-soft-pill danger" });
+    }
   }
 }

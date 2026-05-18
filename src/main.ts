@@ -51,7 +51,8 @@ export default class HomeDashboardPlugin extends Plugin {
       callback: () => {
         new InboxTaskModal(this.app, async (title, dueDate) => {
           const adapter = new DidaSyncAdapter(this.app as unknown as ConstructorParameters<typeof DidaSyncAdapter>[0]);
-          const ok = await adapter.addInboxTask(title, dueDate);
+          const due = dueDate instanceof Date ? dueDate : undefined;
+          const ok = await adapter.addInboxTask(title, due);
           new Notice(ok ? "已添加到滴答收集箱" : "未检测到 Obsidian-DidaSync，无法添加任务");
           this.app.workspace.getLeavesOfType(HOME_DASHBOARD_VIEW_TYPE).forEach((leaf) => {
             const view = leaf.view;
