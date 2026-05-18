@@ -489,8 +489,8 @@ export class HomeDashboardView extends ItemView {
   }
 
   private openAddTaskModal(): void {
-    new InboxTaskModal(this.app, async (title) => {
-      const ok = await this.adapter.addInboxTask(title);
+    new InboxTaskModal(this.app, async (title, dueDate) => {
+      const ok = await this.adapter.addInboxTask(title, dueDate);
       new Notice(ok ? "已添加到滴答收集箱" : "未检测到 Obsidian-DidaSync，无法添加任务");
       this.scheduleRefresh("tasks");
     }).open();

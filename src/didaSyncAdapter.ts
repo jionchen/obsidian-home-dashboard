@@ -81,17 +81,17 @@ export class DidaSyncAdapter {
     return false;
   }
 
-  async addInboxTask(title: string): Promise<boolean> {
+  async addInboxTask(title: string, dueDate?: Date): Promise<boolean> {
     const plugin = this.plugin;
     if (!plugin?.settings) return false;
+    const due = dueDate?.toISOString();
     const task: DidaTaskLike = {
       id: Date.now().toString(),
       title,
       status: 0,
       projectId: "inbox",
       projectName: "收集箱",
-      startDate: new Date().toISOString(),
-      dueDate: new Date().toISOString(),
+      ...(due ? { startDate: due, dueDate: due } : {}),
       kind: "TEXT",
       items: []
     };

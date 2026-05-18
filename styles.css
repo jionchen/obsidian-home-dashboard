@@ -501,6 +501,29 @@ body.theme-dark .ohd-root {
   font-size: 12px;
 }
 
+.ohd-modal-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ohd-modal-chip {
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 999px;
+  color: var(--text-normal);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 12px;
+}
+
+.ohd-modal-chip.active {
+  background: var(--interactive-accent);
+  border-color: var(--interactive-accent);
+  color: var(--text-on-accent);
+}
+
 @media (max-width: 1100px) {
   .ohd-header {
     align-items: flex-start;

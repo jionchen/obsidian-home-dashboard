@@ -85,7 +85,7 @@ export function buildTaskPlan(tasks: DidaTaskLike[], now = new Date()): TaskPlan
     const rankDiff = rank[a.bucket] - rank[b.bucket];
     return rankDiff || sortByDateThenTitle(a, b);
   });
-  const week = open.filter((task) => task.bucket === "thisWeek").sort(sortByDateThenTitle);
+  const week = open.filter((task) => task.bucket === "today" || task.bucket === "thisWeek").sort(sortByDateThenTitle);
 
   return {
     current: open,
