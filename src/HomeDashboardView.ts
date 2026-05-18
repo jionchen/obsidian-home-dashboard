@@ -149,7 +149,7 @@ export class HomeDashboardView extends ItemView {
     titleWrap.createSpan({ text: formatDate(), cls: "ohd-date" });
 
     const actions = header.createDiv("ohd-header-actions");
-    const search = actions.createEl("input", {
+    const search = header.createEl("input", {
       type: "search",
       placeholder: "搜索笔记 / 输入命令",
       cls: "ohd-search"
@@ -161,6 +161,8 @@ export class HomeDashboardView extends ItemView {
         if (command) void this.app.workspace.openLinkText(command, "", false);
       }
     });
+    // Reorder so search sits between title and actions
+    header.insertBefore(search, actions);
 
     const add = actions.createEl("button", { cls: "ohd-button ohd-button-primary" });
     setIcon(add, "plus");

@@ -106,7 +106,11 @@ body.theme-dark .ohd-root {
 }
 
 .ohd-search {
-  width: min(34vw, 420px);
+  flex: 0 1 360px;
+  margin: 0 auto;
+  max-width: 360px;
+  min-width: 200px;
+  width: 100%;
 }
 
 .ohd-search:focus,
@@ -504,6 +508,8 @@ body.theme-dark .ohd-root {
   }
 
   .ohd-search {
+    margin: 0;
+    max-width: none;
     width: 100%;
   }
 
