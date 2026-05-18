@@ -315,7 +315,7 @@ export class HomeDashboardView extends ItemView {
 
     const range = card.createDiv("ohd-task-column");
     const rangeHeader = range.createDiv("ohd-task-range-head");
-    rangeHeader.createEl("h3", { text: this.taskRange === "week" ? "本周计划" : "全部任务" });
+    rangeHeader.createEl("h3", { text: "代办" });
     const switcher = rangeHeader.createDiv("ohd-segment");
     const weekBtn = switcher.createEl("button", { text: "本周", cls: this.taskRange === "week" ? "active" : "" });
     const allBtn = switcher.createEl("button", { text: "全部", cls: this.taskRange === "all" ? "active" : "" });
@@ -330,18 +330,20 @@ export class HomeDashboardView extends ItemView {
       this.renderTasks();
     });
 
-    const rangeTasks = this.taskRange === "week" ? plan.week : plan.allOpen;
-    if (rangeTasks.length === 0 && this.taskRange === "week") {
+    const rangeTasks = this.taskRange === "week" ? plan.week : plan.upcoming;
+    if (rangeTasks.length === 0) {
       const empty = range.createDiv("ohd-empty");
-      empty.createDiv({ text: "本周暂无安排" });
-      const showAll = empty.createEl("button", {
-        text: `查看全部 ${plan.counts.open}`,
-        cls: "ohd-button ohd-button-ghost"
-      });
-      showAll.addEventListener("click", () => {
-        this.taskRange = "all";
-        this.renderTasks();
-      });
+      empty.createDiv({ text: "暂无代办" });
+      if (this.taskRange === "week" && plan.upcoming.length > 0) {
+        const showAll = empty.createEl("button", {
+          text: `查看全部 ${plan.upcoming.length}`,
+          cls: "ohd-button ohd-button-ghost"
+        });
+        showAll.addEventListener("click", () => {
+          this.taskRange = "all";
+          this.renderTasks();
+        });
+      }
     } else {
       this.renderTaskList(range, rangeTasks);
     }

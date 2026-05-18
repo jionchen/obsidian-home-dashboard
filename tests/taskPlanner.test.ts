@@ -25,7 +25,8 @@ describe("buildTaskPlan", () => {
       total: 5
     });
     expect(plan.current.map((task) => task.title)).toEqual(["旧任务", "今天任务", "本周任务", "未来任务"]);
-    expect(plan.week.map((task) => task.title)).toEqual(["今天任务", "本周任务"]);
+    expect(plan.week.map((task) => task.title)).toEqual(["本周任务"]);
+    expect(plan.upcoming.map((task) => task.title)).toEqual(["本周任务", "未来任务"]);
   });
 
   it("prioritizes overdue and today tasks in the current column", () => {

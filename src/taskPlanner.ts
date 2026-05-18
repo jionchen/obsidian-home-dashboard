@@ -20,6 +20,7 @@ export type PlannedTask = DidaTaskLike & {
 export type TaskPlan = {
   current: PlannedTask[];
   week: PlannedTask[];
+  upcoming: PlannedTask[];
   allOpen: PlannedTask[];
   completed: PlannedTask[];
   counts: {
@@ -85,11 +86,13 @@ export function buildTaskPlan(tasks: DidaTaskLike[], now = new Date()): TaskPlan
     const rankDiff = rank[a.bucket] - rank[b.bucket];
     return rankDiff || sortByDateThenTitle(a, b);
   });
-  const week = open.filter((task) => task.bucket === "today" || task.bucket === "thisWeek").sort(sortByDateThenTitle);
+  const week = open.filter((task) => task.bucket === "thisWeek").sort(sortByDateThenTitle);
+  const upcoming = open.filter((task) => task.bucket === "thisWeek" || task.bucket === "later").sort(sortByDateThenTitle);
 
   return {
     current: open,
     week,
+    upcoming,
     allOpen: open,
     completed,
     counts: {
