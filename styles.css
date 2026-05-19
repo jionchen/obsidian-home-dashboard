@@ -93,6 +93,10 @@ body.theme-dark .ohd-root {
   gap: 10px;
 }
 
+.ohd-card-actions {
+  flex-wrap: wrap;
+}
+
 .ohd-search,
 .ohd-input {
   background: var(--ohd-card);
@@ -157,7 +161,7 @@ body.theme-dark .ohd-root {
   grid-template-areas:
     "today tasks focus"
     "today tasks recent";
-  grid-template-columns: minmax(190px, .9fr) minmax(440px, 2.2fr) minmax(230px, 1fr);
+  grid-template-columns: minmax(260px, 1.2fr) minmax(380px, 1.6fr) minmax(230px, 1fr);
   align-items: start;
 }
 
