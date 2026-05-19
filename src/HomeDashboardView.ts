@@ -55,6 +55,8 @@ export class HomeDashboardView extends ItemView {
 
   private refreshTimer?: number;
   private pending = new Set<RefreshKind>();
+  private tasksPollTimer?: number;
+  private lastTasksSignature = "";
 
   constructor(leaf: WorkspaceLeaf, private readonly plugin: HomeDashboardPlugin) {
     super(leaf);
@@ -79,12 +81,24 @@ export class HomeDashboardView extends ItemView {
     this.registerEvent(this.app.vault.on("create", () => this.scheduleRefresh("vault")));
     this.registerEvent(this.app.vault.on("delete", () => this.scheduleRefresh("vault")));
     this.registerEvent(this.app.vault.on("rename", () => this.scheduleRefresh("vault")));
+    this.lastTasksSignature = this.adapter.getTasksSignature();
+    this.tasksPollTimer = window.setInterval(() => {
+      const sig = this.adapter.getTasksSignature();
+      if (sig !== this.lastTasksSignature) {
+        this.lastTasksSignature = sig;
+        this.scheduleRefresh("tasks");
+      }
+    }, 2000);
   }
 
   async onClose(): Promise<void> {
     if (this.refreshTimer !== undefined) {
       window.clearTimeout(this.refreshTimer);
       this.refreshTimer = undefined;
+    }
+    if (this.tasksPollTimer !== undefined) {
+      window.clearInterval(this.tasksPollTimer);
+      this.tasksPollTimer = undefined;
     }
   }
 
@@ -176,7 +190,22 @@ export class HomeDashboardView extends ItemView {
     new NoteCreateModal(this.app, (raw) => createAndOpenNote(this.app, raw)).open();
   }
 
+  private safeRender(section: HTMLElement | undefined, label: string, fn: () => void): void {
+    if (!section) return;
+    try {
+      fn();
+    } catch (error) {
+      console.error(`[home-dashboard] ${label} render failed`, error);
+      section.empty();
+      section.createDiv({ text: `${label} 数据读取出错，请点击同步刷新`, cls: "ohd-muted" });
+    }
+  }
+
   private renderToday(): void {
+    this.safeRender(this.todaySection, "今日笔记", () => this.renderTodayInner());
+  }
+
+  private renderTodayInner(): void {
     if (!this.todaySection) return;
     const card = this.todaySection;
     card.empty();
@@ -218,6 +247,10 @@ export class HomeDashboardView extends ItemView {
   }
 
   private renderTodayAgenda(): void {
+    this.safeRender(this.agendaSection, "今日议程", () => this.renderTodayAgendaInner());
+  }
+
+  private renderTodayAgendaInner(): void {
     if (!this.agendaSection) return;
     const section = this.agendaSection;
     section.empty();
@@ -257,6 +290,10 @@ export class HomeDashboardView extends ItemView {
   }
 
   private renderTasks(): void {
+    this.safeRender(this.taskSection, "代办", () => this.renderTasksInner());
+  }
+
+  private renderTasksInner(): void {
     if (!this.taskSection) return;
     const card = this.taskSection;
     card.empty();
@@ -275,10 +312,14 @@ export class HomeDashboardView extends ItemView {
     stats.createSpan({ text: `今天 ${plan.counts.today}`, cls: "ohd-chip primary" });
     stats.createSpan({ text: `未完成 ${plan.counts.open}`, cls: "ohd-chip" });
     const syncBtn = stats.createEl("button", { text: "同步", cls: "ohd-button ohd-button-ghost ohd-button-compact" });
-    syncBtn.addEventListener("click", async () => {
-      const ok = await this.adapter.sync();
-      new Notice(ok ? "已触发滴答同步" : "未检测到 Obsidian-DidaSync 同步能力");
+    syncBtn.addEventListener("click", () => {
+      this.lastTasksSignature = this.adapter.getTasksSignature();
       this.scheduleRefresh("tasks");
+      void this.adapter.sync().then((ok) => {
+        new Notice(ok ? "已触发滴答同步" : "未检测到 Obsidian-DidaSync 同步能力");
+        this.lastTasksSignature = this.adapter.getTasksSignature();
+        this.scheduleRefresh("tasks");
+      });
     });
 
     const addRow = card.createDiv("ohd-task-add");
@@ -353,6 +394,10 @@ export class HomeDashboardView extends ItemView {
   }
 
   private renderFocus(): void {
+    this.safeRender(this.focusSection, "工作焦点", () => this.renderFocusInner());
+  }
+
+  private renderFocusInner(): void {
     if (!this.focusSection) return;
     const card = this.focusSection;
     card.empty();
@@ -387,6 +432,10 @@ export class HomeDashboardView extends ItemView {
   }
 
   private renderRecent(): void {
+    this.safeRender(this.recentSection, "最近编辑", () => this.renderRecentInner());
+  }
+
+  private renderRecentInner(): void {
     if (!this.recentSection) return;
     const card = this.recentSection;
     card.empty();
@@ -421,6 +470,10 @@ export class HomeDashboardView extends ItemView {
   }
 
   private renderOverview(): void {
+    this.safeRender(this.overviewSection, "概览", () => this.renderOverviewInner());
+  }
+
+  private renderOverviewInner(): void {
     if (!this.overviewSection) return;
     this.overviewSection.empty();
     const state = this.adapter.getState();

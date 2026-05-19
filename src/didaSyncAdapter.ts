@@ -60,6 +60,16 @@ export class DidaSyncAdapter {
     return Array.isArray(tasks) ? tasks : [];
   }
 
+  getTasksSignature(): string {
+    const tasks = this.getTasks();
+    if (tasks.length === 0) return "0";
+    const first = tasks[0];
+    const last = tasks[tasks.length - 1];
+    const firstKey = first.didaId ?? first.id ?? "";
+    const lastKey = (last as DidaTaskLike & { updatedAt?: string }).updatedAt ?? last.didaId ?? last.id ?? "";
+    return `${tasks.length}:${firstKey}:${lastKey}`;
+  }
+
   async toggleTask(taskId: string): Promise<boolean> {
     const plugin = this.plugin;
     if (!plugin?.toggleTask) return false;
