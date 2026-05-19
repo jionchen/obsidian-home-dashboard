@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "node esbuild.config.mjs",
     "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+    "deploy": "node scripts/deploy.mjs",
+    "release": "npm run build && npm run deploy",
     "test": "vitest run"
   },
   "keywords": [
